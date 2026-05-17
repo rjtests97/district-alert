@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: "*/10 * * * *"
   workflow_dispatch:
+    inputs:
+      force_test_alert:
+        description: "Send a Telegram test message"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -34,6 +40,7 @@ jobs:
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
+          FORCE_TEST_ALERT: ${{ inputs.force_test_alert || 'false' }}
         run: python check.py
 
       - name: Commit updated state
