@@ -98,3 +98,214 @@ def district_headers() -> Dict[str, str]:
         "Content-Type": "application/json",
         "Origin": DISTRICT_BASE_URL,
         "Referer": f"{DISTRICT_BASE_URL}/",
+        "x-app-platform": "web",
+        "x-client-source": "district",
+        "x-is-events-supported": "true",
+    }
+
+
+def fetch_search_results(keyword: str) -> dict:
+    payload = {
+        "get_search_results_request_type": 1,
+        "post_body": {"hp_selected_tab_id": "home_v2"},
+        "search_id": str(uuid.uuid4()),
+        "keyword": keyword,
+        "tab_id": "all",
+    }
+
+    try:
+        response = requests.post(
+            SEARCH_API_URL,
+            headers=district_headers(),
+            json=payload,
+            timeout=REQUEST_TIMEOUT,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        raise MonitoringError(f"Failed to fetch District search results: {exc}") from exc
+
+    if not isinstance(data, dict):
+        raise MonitoringError("District search API returned a non-object response.")
+
+    return data
+
+
+def is_true_latent_match(text: str) -> bool:
+    return bool(LATENT_PATTERN.search(text or ""))
+
+
+def extract_latent_events(search_response: dict) -> List[dict]:
+    raw_results = search_response.get("results", [])
+    if not isinstance(raw_results, list):
+        raise MonitoringError("District search API response did not include a valid results list.")
+
+    latent_events: Dict[str, dict] = {}
+
+    for item in raw_results:
+        if not isinstance(item, dict):
+            continue
+        if item.get("entity_type") != "EntityTypeEvent":
+            continue
+
+        title = (item.get("display_title") or "").strip()
+        metadata = item.get("metadata") or {}
+        if not isinstance(metadata, dict):
+            metadata = {}
+
+        slug = (metadata.get("slug") or "").strip()
+        artist_name = (metadata.get("artist_name") or "").strip()
+        venue_name = (metadata.get("venue_name") or "").strip()
+        city_name = (metadata.get("city_name") or "").strip()
+
+        haystacks = [title, slug, artist_name, venue_name, city_name]
+        if not any(is_true_latent_match(value) for value in haystacks):
+            continue
+
+        if not slug:
+            logger.warning("Skipping latent-like event without slug: %s", title)
+            continue
+
+        event_url = build_event_url_from_slug(slug)
+        event_key = event_url.lower()
+        latent_events[event_key] = {
+            "title": title,
+            "url": event_url,
+            "slug": slug,
+            "artist_name": artist_name,
+            "venue_name": venue_name,
+            "city_name": city_name,
+        }
+
+    return sorted(latent_events.values(), key=lambda event: event["url"].lower())
+
+
+def send_telegram_alert(bot_token: str, chat_id: str, events: List[dict]) -> None:
+    if not events:
+        return
+
+    lines = ["🚨 INDIA'S GOT LATENT ALERT 🚨", ""]
+    for index, event in enumerate(events, start=1):
+        lines.append(f"New event found #{index}:")
+        lines.append(event["title"])
+        lines.append(event["url"])
+        if index != len(events):
+            lines.append("")
+
+    message = "\n".join(lines)
+
+    endpoint = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": message,
+        "disable_web_page_preview": True,
+    }
+
+    try:
+        response = requests.post(endpoint, data=payload, timeout=REQUEST_TIMEOUT)
+        response.raise_for_status()
+        body = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        raise MonitoringError(f"Telegram notification failed: {exc}") from exc
+
+    if not body.get("ok"):
+        description = body.get("description", "Unknown Telegram API error")
+        raise MonitoringError(f"Telegram notification failed: {description}")
+
+
+def send_test_telegram_alert(bot_token: str, chat_id: str) -> None:
+    endpoint = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    message = (
+        "TEST ALERT\n\n"
+        "District latent monitor is connected to Telegram and can send messages."
+    )
+    payload = {
+        "chat_id": chat_id,
+        "text": message,
+        "disable_web_page_preview": True,
+    }
+
+    try:
+        response = requests.post(endpoint, data=payload, timeout=REQUEST_TIMEOUT)
+        response.raise_for_status()
+        body = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        raise MonitoringError(f"Telegram test notification failed: {exc}") from exc
+
+    if not body.get("ok"):
+        description = body.get("description", "Unknown Telegram API error")
+        raise MonitoringError(f"Telegram test notification failed: {description}")
+
+
+def main() -> int:
+    bot_token = os.environ.get("BOT_TOKEN", "").strip()
+    chat_id = os.environ.get("CHAT_ID", "").strip()
+    force_test_alert = os.environ.get("FORCE_TEST_ALERT", "").strip().lower() == "true"
+
+    try:
+        state = load_state()
+        current_time = utc_now_iso()
+
+        if force_test_alert:
+            if not bot_token or not chat_id:
+                raise MonitoringError("FORCE_TEST_ALERT was requested, but BOT_TOKEN and/or CHAT_ID are missing.")
+            send_test_telegram_alert(bot_token, chat_id)
+            state["last_checked_at"] = current_time
+            save_state(state)
+            logger.info("Sent Telegram test alert.")
+            return 0
+
+        search_response = fetch_search_results(KEYWORD)
+        latent_events = extract_latent_events(search_response)
+        latent_urls = [event["url"] for event in latent_events]
+
+        logger.info("District search returned %s true latent event match(es).", len(latent_events))
+
+        known_urls = {
+            normalize_event_url(url).lower()
+            for url in state.get("known_latent_event_urls", [])
+            if normalize_event_url(url)
+        }
+        current_events_by_key = {event["url"].lower(): event for event in latent_events}
+        new_events = sorted(
+            (
+                current_events_by_key[key]
+                for key in current_events_by_key
+                if key not in known_urls
+            ),
+            key=lambda event: event["url"].lower(),
+        )
+
+        if not STATE_FILE.exists():
+            logger.info("First run detected. Seeding state without sending alerts.")
+            state["known_latent_event_urls"] = latent_urls
+            state["last_checked_at"] = current_time
+            save_state(state)
+            return 0
+
+        if new_events:
+            if not bot_token or not chat_id:
+                raise MonitoringError(
+                    "New latent event(s) found, but BOT_TOKEN and/or CHAT_ID are missing."
+                )
+            send_telegram_alert(bot_token, chat_id, new_events)
+            state["last_alerted_at"] = current_time
+            logger.info("Sent Telegram alert for %s new latent event(s).", len(new_events))
+        else:
+            logger.info("No new latent events found.")
+
+        state["known_latent_event_urls"] = latent_urls
+        state["last_checked_at"] = current_time
+        save_state(state)
+        return 0
+
+    except MonitoringError as exc:
+        logger.error("%s", exc)
+        return 1
+    except Exception as exc:
+        logger.exception("Unexpected error: %s", exc)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
