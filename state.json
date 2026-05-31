@@ -3,7 +3,7 @@
   "keyword": "latent",
   "known_latent_event_urls": [],
   "last_alerted_at": null,
-  "last_checked_at": "2026-05-31T06:45:30+00:00",
+  "last_checked_at": "2026-05-31T06:50:23+00:00",
   "search_api_url": "https://www.district.in/gw/web/search",
   "version": 1
 }
