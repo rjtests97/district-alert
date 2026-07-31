@@ -1,9 +1,11 @@
 {
   "artist_url": "https://www.district.in/events/samay-raina/artist",
   "keyword": "latent",
-  "known_latent_event_urls": [],
-  "last_alerted_at": "2026-07-03T15:18:15+00:00",
-  "last_checked_at": "2026-07-31T12:13:28+00:00",
+  "known_latent_event_urls": [
+    "https://www.district.in/events/indias-got-latent-season-2-watch-party-versova-2026"
+  ],
+  "last_alerted_at": "2026-07-31T14:35:18+00:00",
+  "last_checked_at": "2026-07-31T14:35:18+00:00",
   "search_api_url": "https://www.district.in/gw/web/search",
   "version": 1
 }
