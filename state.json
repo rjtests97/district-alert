@@ -4,11 +4,10 @@
   "known_latent_event_urls": [
     "https://www.district.in/events/indias-got-latent-season-2-watch-party-chembur-2026",
     "https://www.district.in/events/indias-got-latent-season-2-watch-party-versova-2026",
-    "https://www.district.in/events/watch-party-indias-got-latent-s02-dadar-2026",
     "https://www.district.in/events/watch-party-indias-got-latent-s02-malad-2026"
   ],
   "last_alerted_at": "2026-08-02T07:10:00+00:00",
-  "last_checked_at": "2026-08-02T15:28:42+00:00",
+  "last_checked_at": "2026-08-02T16:28:58+00:00",
   "search_api_url": "https://www.district.in/gw/web/search",
   "version": 1
 }
