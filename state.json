@@ -2,11 +2,11 @@
   "artist_url": "https://www.district.in/events/samay-raina/artist",
   "keyword": "latent",
   "known_latent_event_urls": [
-    "https://www.district.in/events/watch-party-indias-got-latent-s02-malad-2026",
-    "https://www.district.in/events/watch-party-indias-got-latent-s02-saket-2026"
+    "https://www.district.in/events/watch-party-indias-got-latent-s02-dadar-2026",
+    "https://www.district.in/events/watch-party-indias-got-latent-s02-malad-2026"
   ],
-  "last_alerted_at": "2026-08-05T09:44:29+00:00",
-  "last_checked_at": "2026-08-05T09:44:29+00:00",
+  "last_alerted_at": "2026-08-05T11:45:43+00:00",
+  "last_checked_at": "2026-08-05T11:45:43+00:00",
   "search_api_url": "https://www.district.in/gw/web/search",
   "version": 1
 }
